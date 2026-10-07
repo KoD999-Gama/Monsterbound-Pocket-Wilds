@@ -10,10 +10,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Unpack phone release package
+        shell: bash
+        run: |
+          if [ -f Monsterbound_Pocket_Wilds_COLOR_PHONE_RELEASE.zip ]; then
+            unzip -o Monsterbound_Pocket_Wilds_COLOR_PHONE_RELEASE.zip -d /tmp/monsterbound
+            cp -a /tmp/monsterbound/. .
+          fi
+          test -f app/src/main/assets/index.html
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
