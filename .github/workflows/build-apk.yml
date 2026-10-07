@@ -17,11 +17,177 @@ jobs:
       - name: Unpack phone release package
         shell: bash
         run: |
-          if [ -f Monsterbound_Pocket_Wilds_COLOR_PHONE_RELEASE.zip ]; then
-            unzip -o Monsterbound_Pocket_Wilds_COLOR_PHONE_RELEASE.zip -d /tmp/monsterbound
-            cp -a /tmp/monsterbound/. .
-          fi
+          test -f Monsterbound_Pocket_Wilds_COLOR_PHONE_RELEASE.zip
+          rm -rf /tmp/monsterbound
+          mkdir -p /tmp/monsterbound
+          unzip -o Monsterbound_Pocket_Wilds_COLOR_PHONE_RELEASE.zip -d /tmp/monsterbound
+          cp -a /tmp/monsterbound/. .
           test -f app/src/main/assets/index.html
+          test -f app/src/main/java/com/monsterbound/pocketwilds/MainActivity.java
+
+      - name: Apply mobile performance and layout patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/assets/index.html')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace(
+              '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">',
+              '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">'
+          )
+          a, b = s.index('<style>'), s.index('</style>', s.index('<style>')) + 8
+          css = '''<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;min-height:100%;background:radial-gradient(circle at 50% 0%,#123b54 0,#081321 52%,#04070d 100%);color:#fff;font-family:monospace;overflow:hidden;overscroll-behavior:none}
+body{display:flex;justify-content:center;align-items:flex-start;touch-action:manipulation;padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))}
+.wrap{width:min(100%,760px);height:100%;display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 0}
+h1{text-align:center;font-size:clamp(13px,3.6vw,18px);line-height:1;margin:2px 0;color:#fff;text-shadow:2px 2px #ff3d81,-1px -1px #00e5ff;flex:0 0 auto}
+.screen{width:min(96vw,680px,calc((100dvh - 250px)*1.1111));max-width:680px;background:#101827;border:5px solid #7c4dff;box-shadow:0 0 0 2px #00e5ff,0 0 18px #ff3d81;padding:5px;border-radius:10px;flex:0 0 auto}
+canvas{display:block;width:100%;height:auto;aspect-ratio:160/144;margin:auto;image-rendering:pixelated;image-rendering:crisp-edges;background:#63d8ff;border:2px solid #ffd54a;border-radius:4px;box-shadow:0 0 10px #00e5ff;touch-action:none}
+.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:min(94vw,420px);margin:0 auto;gap:5px;flex:0 0 auto}
+button{font:700 13px monospace;padding:8px 6px;border:2px solid #00e5ff;background:linear-gradient(#fff36b,#ffca3a);color:#17112e;min-height:40px;border-radius:8px;box-shadow:0 3px 0 #7c4dff;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 #7c4dff}
+.panel{display:none;width:min(94vw,680px);max-height:34dvh;overflow:auto;background:#fff4c7;color:#17112e;border:3px solid #ff3d81;padding:8px;margin:0;border-radius:8px;overscroll-behavior:contain}
+.panel button{margin:3px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px}.small{font-size:11px}.status{text-align:center;font-size:10px;line-height:1.1;margin:0;color:#7fffd4;flex:0 0 auto}
+input{font:14px monospace;width:70px}
+@media (max-height:620px){h1{display:none}.wrap{gap:3px}.screen{width:min(92vw,calc((100dvh - 150px)*1.1111));padding:3px}.controls{gap:3px}button{min-height:34px;padding:5px}.status{display:none}.panel{max-height:25dvh}}
+@media (min-width:700px){body{align-items:center}.wrap{height:auto}.screen{width:min(680px,88vw)}}
+</style>'''
+          s = s[:a] + css + s[b:]
+          leak = '\n</script>\n\n</body></html>\nsetInterval(()=>{if(typeof autoSave===\'function\'&&S&&S.mode!==\'title\')autoSave()},15000);'
+          if leak in s:
+              s = s.replace(leak, '\n</script>\n\n</body></html>')
+          elif s.rstrip().endswith('setInterval(()=>{if(typeof autoSave===\'function\'&&S&&S.mode!==\'title\')autoSave()},15000);'):
+              s = s.rstrip()
+              s = s[:s.rfind('\nsetInterval(')] + '\n'
+          marker = "load();loop();\n})();"
+          if marker in s:
+              s = s.replace(marker, "function autoSave(){try{localStorage.setItem('monsterbound_full_save_v2',JSON.stringify(S));}catch(e){}}\nsetInterval(()=>{if(S&&S.mode!=='title')autoSave()},15000);\nload();loop();\n})();")
+          p.write_text(s, encoding='utf-8')
+          assert '<script>' in s and s.rstrip().endswith('</html>')
+          assert 'setInterval' in s[s.index('<script>'):]
+          assert not s.rstrip().endswith('setInterval(()=>')
+          PY
+
+          cat > app/src/main/java/com/monsterbound/pocketwilds/MainActivity.java <<'JAVA'
+package com.monsterbound.pocketwilds;
+
+import android.app.Activity;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+
+public class MainActivity extends Activity {
+    private WebView web;
+
+    @Override
+    protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().setStatusBarColor(Color.BLACK);
+        getWindow().setNavigationBarColor(Color.BLACK);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+
+        web = new WebView(this);
+        web.setBackgroundColor(Color.BLACK);
+        web.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        web.setVerticalScrollBarEnabled(false);
+        web.setHorizontalScrollBarEnabled(false);
+        web.setWebViewClient(new WebViewClient());
+        web.setWebChromeClient(new WebChromeClient());
+
+        WebSettings w = web.getSettings();
+        w.setJavaScriptEnabled(true);
+        w.setDomStorageEnabled(true);
+        w.setAllowFileAccess(true);
+        w.setAllowContentAccess(false);
+        w.setBuiltInZoomControls(false);
+        w.setDisplayZoomControls(false);
+        w.setSupportZoom(false);
+        w.setTextZoom(100);
+        w.setUseWideViewPort(false);
+        w.setLoadWithOverviewMode(false);
+        w.setMediaPlaybackRequiresUserGesture(true);
+        w.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
+        root.addView(web, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
+
+        hideSystemUi();
+        web.loadUrl("file:///android_asset/index.html");
+    }
+
+    private void hideSystemUi() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) hideSystemUi();
+    }
+
+    @Override
+    protected void onPause() {
+        if (web != null) web.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (web != null) web.onResume();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (web != null) web.evaluateJavascript("if(typeof back==='function')back();", null);
+        else super.onBackPressed();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (web != null) {
+            web.stopLoading();
+            web.loadUrl("about:blank");
+            web.clearHistory();
+            web.removeAllViews();
+            web.destroy();
+            web = null;
+        }
+        super.onDestroy();
+    }
+}
+JAVA
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/AndroidManifest.xml')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('<application android:icon=', '<application android:hardwareAccelerated="true" android:icon=')
+          s=s.replace('<activity android:name=".MainActivity"', '<activity android:name=".MainActivity" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustNothing"')
+          p.write_text(s,encoding='utf-8')
+          PY
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -31,12 +197,6 @@ jobs:
 
       - name: Prepare Android SDK
         shell: bash
-        run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
-          test -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" || true
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-
-      - name: Install Android SDK 36
         run: |
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           test -x "$SDKMANAGER"
@@ -48,7 +208,7 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Validate game JavaScript
+      - name: Validate HTML and JavaScript
         shell: bash
         run: |
           python3 - <<'PY'
@@ -56,13 +216,16 @@ jobs:
           from pathlib import Path
           html = Path('app/src/main/assets/index.html').read_text(encoding='utf-8')
           scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, re.S)
-          Path('/tmp/monsterbound.js').write_text('\n'.join(scripts), encoding='utf-8')
+          assert len(scripts) == 1, f'Expected exactly one script block, found {len(scripts)}'
+          assert html.rstrip().endswith('</html>'), 'HTML document does not end cleanly'
+          assert 'setInterval' in scripts[0], 'Autosave timer missing from script'
+          Path('/tmp/monsterbound.js').write_text(scripts[0], encoding='utf-8')
           print(f'Embedded scripts: {len(scripts)}')
           print(f'HTML bytes: {len(html.encode())}')
           PY
           node --check /tmp/monsterbound.js
 
-      - name: Build APK and AAB
+      - name: Build debug APK and release AAB
         run: gradle --no-daemon --stacktrace assembleDebug bundleRelease
 
       - name: Upload APK
@@ -73,7 +236,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload unsigned AAB
+      - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: Monsterbound-Pocket-Wilds-AAB-unsigned
