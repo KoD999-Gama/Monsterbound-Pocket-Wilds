@@ -27,6 +27,21 @@ jobs:
           test -f app/src/main/assets/index.html
           test -f app/src/main/java/com/monsterbound/pocketwilds/MainActivity.java
           test -f app/src/main/AndroidManifest.xml
+      - name: Preflight game source
+        working-directory: apk
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path("app/src/main/assets/index.html")
+          s=p.read_text(encoding="utf-8")
+          assert "<script>" in s and "</script>" in s, "Missing script block"
+          assert s.count("<script>") == s.count("</script>") == 1, "Unbalanced script tags"
+          assert s.endswith("</body></html>"), "HTML has trailing content outside the document"
+          assert "setInterval(()=>{if(typeof save==='function'" in s, "Autosave hook missing"
+          assert "MONSTERBOUND: POCKET WILDS" in s, "Game title missing"
+          assert "150 CREATURES" in s, "150-creature marker missing"
+          print("HTML preflight: PASS")
+          PY
       - name: Build debug APK
         working-directory: apk
         run: gradle --no-daemon --stacktrace assembleDebug
