@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Monsterbound: Pocket Wilds • 2.0 Silver-Style Mod Pack</title>
+<style>
+html,body{margin:0;background:linear-gradient(135deg,#160b2e,#082c45 55%,#132d18);color:#fff;font-family:monospace;height:100%;overflow:auto}
+body{display:flex;justify-content:center}.wrap{width:min(96vw,760px);padding:10px}
+h1{text-align:center;font-size:18px;margin:5px;color:#fff;text-shadow:2px 2px #ff3d81, -1px -1px #00e5ff}.screen{background:#101827;border:7px solid #7c4dff;box-shadow:0 0 0 3px #00e5ff,0 0 22px #ff3d81;padding:8px;border-radius:12px}
+canvas{width:100%;max-width:640px;display:block;margin:auto;image-rendering:pixelated;background:#63d8ff;border:3px solid #ffd54a;border-radius:5px;box-shadow:0 0 14px #00e5ff}
+.controls{display:grid;grid-template-columns:repeat(3,1fr);max-width:300px;margin:8px auto;gap:5px}
+button{font:700 13px monospace;padding:9px;border:2px solid #00e5ff;background:linear-gradient(#fff36b,#ffca3a);color:#17112e;min-height:42px;border-radius:8px;box-shadow:0 3px 0 #7c4dff}
+.panel{display:none;background:#fff4c7;color:#17112e;border:3px solid #ff3d81;padding:10px;margin-top:8px;border-radius:8px}
+.panel button{margin:3px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px}.small{font-size:11px}.status{text-align:center;font-size:11px;margin-top:6px;color:#7fffd4}
+input{font:14px monospace;width:70px}
+
+.modbar{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:7px auto;max-width:640px}.modbar button{min-height:40px}.chip{display:inline-block;padding:3px 6px;border:1px solid #00e5ff;border-radius:10px;margin:2px;font-size:10px}.night{filter:saturate(.9) brightness(.78)}
+@media(max-width:520px){.wrap{width:100%;padding:4px;box-sizing:border-box}.screen{padding:4px;border-width:4px}h1{font-size:15px}button{min-height:48px;font-size:12px}.controls{max-width:100%;gap:4px}.modbar{max-width:100%;grid-template-columns:repeat(3,1fr)}}
+</style>
+
+<meta name="theme-color" content="#7c4dff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+</head>
+<body><div class="wrap">
+<h1>MONSTERBOUND: POCKET WILDS</h1><div class="status">2.0 SILVER-STYLE MOD PACK • ORIGINAL WORLD • 150 CREATURES</div>
+<div class="screen"><canvas id="game" width="160" height="144"></canvas></div>
+<div class="controls">
+<button data-k="up">▲</button><span></span><button data-k="a">A</button>
+<button data-k="left">◀</button><button data-k="down">▼</button><button data-k="right">▶</button>
+</div>
+<div class="controls"><button id="menu">MENU</button><button id="save">SAVE</button><button id="load">LOAD</button></div>
+<div class="controls" id="battleBar">
+<button id="fightBtn">FIGHT</button><button id="capBtn">CAPTURE</button><button id="switchBtn">SWITCH</button>
+</div>
+<div class="controls"><button id="dev">DEV</button></div><div class="modbar"><button id="timeBtn">TIME: AUTO</button><button id="weatherBtn">WEATHER</button><button id="modBtn">MOD INFO</button></div><div id="modPanel" class="panel"></div>
+<div class="status">Arrows/WASD move • Enter/Space = A • Esc = B</div>
+<div id="menuPanel" class="panel"></div>
+<div id="devPanel" class="panel"></div>
+</div>
+
+<script>
+(()=> {
+// === POCKET WILDS 2.0 MOD PACK ===
+const MOD={time:'auto',weather:'clear',chaos:false,encounterBoost:false};
+const WEATHER=['clear','rain','fog','emberfall','moonlight'];
+function modHour(){if(MOD.time==='day')return 12;if(MOD.time==='night')return 23;return new Date().getHours();}
+function modNight(){return modHour()>=19||modHour()<6;}
+function updateModVisual(){document.body.classList.toggle('night',modNight());const b=document.getElementById('timeBtn');if(b)b.textContent='TIME: '+MOD.time.toUpperCase();const w=document.getElementById('weatherBtn');if(w)w.textContent='WEATHER: '+MOD.weather.toUpperCase();}
+function cycleTime(){MOD.time=MOD.time==='auto'?'day':MOD.time==='day'?'night':'auto';updateModVisual();S.msg='Time shifted to '+MOD.time+'.';}
+function cycleWeather(){MOD.weather=WEATHER[(WEATHER.indexOf(MOD.weather)+1)%WEATHER.length];updateModVisual();S.msg='Weather: '+MOD.weather+'.';}
+function showModInfo(){const p=document.getElementById('modPanel');p.innerHTML='<b>POCKET WILDS 2.0 MOD PACK</b><p class="small">An original retro monster RPG with a Silver-era adventure structure, but new creatures, world, story and systems.</p><span class="chip">DAY / NIGHT</span><span class="chip">WEATHER</span><span class="chip">150 MONSTERS</span><span class="chip">CAPTURE</span><span class="chip">EVOLUTION</span><span class="chip">PARTY / BOX</span><span class="chip">DEV MODE</span><p class="small">Night changes the mood and encounter feel. Weather is a world modifier for this release. Use DEV mode for testing.</p><button id="closeMod">CLOSE</button>';p.style.display='block';document.getElementById('closeMod').onclick=()=>p.style.display='none';}
+const c=document.getElementById('game'),g=c.getContext('2d');g.imageSmoothingEnabled=false;
+const C={d:'#17112e',m:'#7c4dff',l:'#63d8ff',p:'#fff4c7',k:'#090613',white:'#ffffff',pink:'#ff3d81',yellow:'#ffd54a',green:'#35e06f',blue:'#3aa9ff',purple:'#9b5cff',orange:'#ff8a3d'};
+const TYPE={Flame:'#ff5a36',Leaf:'#35d05f',Stone:'#9b7653',Mist:'#c77dff',Spark:'#ffe34a',Air:'#62d8ff',Water:'#3198ff',Dark:'#5f4b8b',Frost:'#8cf2ff',Metal:'#b7c4d6'};
+const AREA={town:['#79e36b','#b7f36b'],route1:['#35c96b','#8be36d'],lake:['#269dff','#65e5ff'],grove:['#159447','#54d68a'],summit:['#a65cff','#e0a1ff'],hollow:['#2a1759','#6f42c1']};
+function typeColor(t){return TYPE[t]||C.p}
+function areaColors(){return AREA[S.area]||['#63d8ff','#b7f36b']}
+const monsters=[['Embercub',22,8,6,6,'Flame'],['Mossling',29,13,9,13,'Leaf'],['Pebblit',36,8,12,9,'Stone'],['Mistmew',43,13,15,16,'Mist'],['Voltkit',27,8,8,12,'Spark'],['Thornox',34,13,11,8,'Air'],['Driftowl',41,8,14,15,'Water'],['Cindermite',25,13,7,11,'Dark'],['Brookfin',32,8,10,7,'Frost'],['Gloomole',39,13,13,14,'Metal'],['Frostling',23,8,6,10,'Flame'],['Bramblet',30,13,9,6,'Leaf'],['Duskhare',37,8,12,13,'Stone'],['Coralisk',44,13,15,9,'Mist'],['Skyrunt',28,8,8,16,'Spark'],['Ironimp',35,13,11,12,'Air'],['Glowbug',42,8,14,8,'Water'],['Ravencub',26,13,7,15,'Dark'],['Emberling',33,8,10,11,'Frost'],['Emberit',40,13,13,7,'Metal'],['Embermew',24,8,6,14,'Flame'],['Emberkit',31,13,9,10,'Leaf'],['Emberox',38,8,12,6,'Stone'],['Emberowl',22,13,15,13,'Mist'],['Embermite',29,8,8,9,'Spark'],['Emberfin',36,13,11,16,'Air'],['Embermole',43,8,14,12,'Water'],['Emberlet',27,13,7,8,'Dark'],['Emberhare',34,8,10,15,'Frost'],['Emberisk',41,13,13,11,'Metal'],['Emberrunt',25,8,6,7,'Flame'],['Emberimp',32,13,9,14,'Leaf'],['Emberbug',39,8,12,10,'Stone'],['Emberwing',23,13,15,6,'Mist'],['Emberpaw',30,8,8,13,'Spark'],['Emberwyrm',37,13,11,9,'Air'],['Embersprite',44,8,14,16,'Water'],['Emberfang',28,13,7,12,'Dark'],['Emberhopper',35,8,10,8,'Frost'],['Emberscale',42,13,13,15,'Metal'],['Embertail',26,8,6,11,'Flame'],['Emberhorn',33,13,9,7,'Leaf'],['Emberbeetle',40,8,12,14,'Stone'],['Emberfox',24,13,15,10,'Mist'],['Emberloon',31,8,8,6,'Spark'],['Emberdrake',38,13,11,13,'Air'],['Emberseed',22,8,14,9,'Water'],['Embershell',29,13,7,16,'Dark'],['Embertoad',36,8,10,12,'Frost'],['Emberbat',43,13,13,8,'Metal'],['Emberpup',27,8,6,15,'Flame'],['Emberstag',34,13,9,11,'Leaf'],['Emberfinch',41,8,12,7,'Stone'],['Emberram',25,13,15,14,'Mist'],['Emberlynx',32,8,8,10,'Spark'],['Embernewt',39,13,11,6,'Air'],['Embercrab',23,8,14,13,'Water'],['Embermoth',30,13,7,9,'Dark'],['Emberbear',37,8,10,16,'Frost'],['Emberviper',44,13,13,12,'Metal'],['Emberyak',28,8,6,8,'Flame'],['Emberboar',35,13,9,15,'Leaf'],['Embereel',42,8,12,11,'Stone'],['Embergoat',26,13,15,7,'Mist'],['Mosscub',33,8,8,14,'Spark'],['Mossit',40,13,11,10,'Air'],['Mossmew',24,8,14,6,'Water'],['Mosskit',31,13,7,13,'Dark'],['Mossox',38,8,10,9,'Frost'],['Mossowl',22,13,13,16,'Metal'],['Mossmite',29,8,6,12,'Flame'],['Mossfin',36,13,9,8,'Leaf'],['Mossmole',43,8,12,15,'Stone'],['Mosslet',27,13,15,11,'Mist'],['Mosshare',34,8,8,7,'Spark'],['Mossisk',41,13,11,14,'Air'],['Mossrunt',25,8,14,10,'Water'],['Mossimp',32,13,7,6,'Dark'],['Mossbug',39,8,10,13,'Frost'],['Mosswing',23,13,13,9,'Metal'],['Mosspaw',30,8,6,16,'Flame'],['Mosswyrm',37,13,9,12,'Leaf'],['Mosssprite',44,8,12,8,'Stone'],['Mossfang',28,13,15,15,'Mist'],['Mosshopper',35,8,8,11,'Spark'],['Mossscale',42,13,11,7,'Air'],['Mosstail',26,8,14,14,'Water'],['Mosshorn',33,13,7,10,'Dark'],['Mossbeetle',40,8,10,6,'Frost'],['Mossfox',24,13,13,13,'Metal'],['Mossloon',31,8,6,9,'Flame'],['Mossdrake',38,13,9,16,'Leaf'],['Mossseed',22,8,12,12,'Stone'],['Mossshell',29,13,15,8,'Mist'],['Mosstoad',36,8,8,15,'Spark'],['Mossbat',43,13,11,11,'Air'],['Mosspup',27,8,14,7,'Water'],['Mossstag',34,13,7,14,'Dark'],['Mossfinch',41,8,10,10,'Frost'],['Mossram',25,13,13,6,'Metal'],['Mosslynx',32,8,6,13,'Flame'],['Mossnewt',39,13,9,9,'Leaf'],['Mosscrab',23,8,12,16,'Stone'],['Mossmoth',30,13,15,12,'Mist'],['Mossbear',37,8,8,8,'Spark'],['Mossviper',44,13,11,15,'Air'],['Mossyak',28,8,14,11,'Water'],['Mossboar',35,13,7,7,'Dark'],['Mosseel',42,8,10,14,'Frost'],['Mossgoat',26,13,13,10,'Metal'],['Pebblecub',33,8,6,6,'Flame'],['Pebbleling',40,13,9,13,'Leaf'],['Pebbleit',24,8,12,9,'Stone'],['Pebblemew',31,13,15,16,'Mist'],['Pebblekit',38,8,8,12,'Spark'],['Pebbleox',22,13,11,8,'Air'],['Pebbleowl',29,8,14,15,'Water'],['Pebblemite',36,13,7,11,'Dark'],['Pebblefin',43,8,10,7,'Frost'],['Pebblemole',27,13,13,14,'Metal'],['Pebblelet',34,8,6,10,'Flame'],['Pebblehare',41,13,9,6,'Leaf'],['Pebbleisk',25,8,12,13,'Stone'],['Pebblerunt',32,13,15,9,'Mist'],['Pebbleimp',39,8,8,16,'Spark'],['Pebblebug',23,13,11,12,'Air'],['Pebblewing',30,8,14,8,'Water'],['Pebblepaw',37,13,7,15,'Dark'],['Pebblewyrm',44,8,10,11,'Frost'],['Pebblesprite',28,13,13,7,'Metal'],['Pebblefang',35,8,6,14,'Flame'],['Pebblehopper',42,13,9,10,'Leaf'],['Pebblescale',26,8,12,6,'Stone'],['Pebbletail',33,13,15,13,'Mist'],['Pebblehorn',40,8,8,9,'Spark'],['Pebblebeetle',24,13,11,16,'Air'],['Pebblefox',31,8,14,12,'Water'],['Pebbleloon',38,13,7,8,'Dark'],['Pebbledrake',22,8,10,15,'Frost'],['Pebbleseed',29,13,13,11,'Metal'],['Pebbleshell',36,8,6,7,'Flame'],['Pebbletoad',43,13,9,14,'Leaf'],['Pebblebat',27,8,12,10,'Stone'],['Pebblepup',34,13,15,6,'Mist'],['Pebblestag',41,8,8,13,'Spark'],['Pebblefinch',25,13,11,9,'Air'],['Pebbleram',32,8,14,16,'Water'],['Pebblelynx',39,13,7,12,'Dark'],['Pebblenewt',23,8,10,8,'Frost'],['Pebblecrab',30,13,13,15,'Metal']].map((a,i)=>({id:i,n:a[0],max:a[1],atk:a[2],def:a[3],spd:a[4],type:a[5]}));
+const typeBonus={
+ Flame:{Leaf:1.5,Frost:1.5,Water:.65,Stone:.75},
+ Leaf:{Water:1.5,Stone:1.5,Flame:.65,Frost:.75},
+ Stone:{Air:1.5,Flame:1.5,Leaf:.65,Water:.75},
+ Mist:{Flame:1.5,Air:1.5,Spark:.75,Leaf:.75},
+ Spark:{Water:1.5,Air:1.5,Stone:.65,Leaf:.75},
+ Air:{Leaf:1.5,Dark:1.5,Spark:.75,Stone:.75},
+ Water:{Flame:1.5,Stone:1.5,Leaf:.65,Spark:.75},
+ Dark:{Mist:1.5,Metal:1.5,Air:.75,Flame:.75},
+ Frost:{Leaf:1.5,Air:1.5,Flame:.65,Metal:.75},
+ Metal:{Stone:1.5,Frost:1.5,Flame:.75,Spark:.75}
+};
+const moves=[
+ {n:'Tackle',t:'Stone',p:10,a:95},
+ {n:'Spark Snap',t:'Spark',p:13,a:92},
+ {n:'Leaf Lash',t:'Leaf',p:13,a:92},
+ {n:'Ember Bite',t:'Flame',p:13,a:92},
+ {n:'Mist Wave',t:'Mist',p:13,a:92},
+ {n:'Stone Bash',t:'Stone',p:14,a:88},
+ {n:'Gust Wing',t:'Air',p:12,a:95},
+ {n:'Aqua Jet',t:'Water',p:14,a:90},
+ {n:'Night Claw',t:'Dark',p:14,a:90},
+ {n:'Frost Pin',t:'Frost',p:13,a:92},
+ {n:'Iron Ram',t:'Metal',p:15,a:88},
+ {n:'Wild Roar',t:'Stone',p:17,a:82}
+];
+function buildCreature(id,lv=5){
+ const s=monsters[id];
+ const hp=Math.max(8,s.max+lv*3);
+ const atk=Math.max(3,s.atk+Math.floor(lv*1.3));
+ const def=Math.max(2,s.def+Math.floor(lv*.9));
+ const spd=Math.max(2,s.spd+Math.floor(lv*1.1));
+ const a=(id*7)%moves.length,b=(id*11+3)%moves.length;
+ return {sid:id,lv,hp,max:hp,atk,def,spd,xp:0,moves:[a,b],status:''};
+}
+const areas={
+ town:{name:'Willow Town',w:20,h:18,exits:{east:'route1'},grass:[],heal:[4,4],shop:[16,4],npc:[10,7]},
+ route1:{name:'Route 1',w:20,h:18,exits:{west:'town',east:'lake'},grass:[],trainers:[[14,6,'Mira',[1,2,3]]],npc:[7,9]},
+ lake:{name:'Azure Lake',w:20,h:18,exits:{west:'route1',east:'grove'},grass:[],trainers:[[11,7,'Bram',[8,13,14]]],npc:[5,5]},
+ grove:{name:'Whisper Grove',w:20,h:18,exits:{west:'lake',east:'summit'},grass:[],trainers:[[8,6,'Rook',[5,11,12]]],npc:[15,8]},
+ summit:{name:'Elder Summit',w:20,h:18,exits:{west:'grove'},grass:[],boss:[14,5,[15,16,17]],npc:[6,5]}
+};
+for(let y=4;y<13;y++)for(let x=4;x<16;x++)if((x+y)%3)areas.route1.grass.push([x,y]);
+for(let y=3;y<14;y++)for(let x=3;x<17;x++)if((x*2+y)%4)areas.lake.grass.push([x,y]);
+for(let y=3;y<14;y++)for(let x=3;x<17;x++)if((x*3+y)%5)areas.grove.grass.push([x,y]);
+for(let y=2;y<15;y++)for(let x=2;x<18;x++)if((x+y*2)%4)areas.hollow.grass.push([x,y]);
+
+const encounterTables={
+ route1:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29],
+ lake:[30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59],
+ grove:[60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89],
+ summit:[90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119],
+ hollow:[120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149],
+};
+const trainerTeams={
+ Mira:[1,2,3],Bram:[8,13,14],Rook:[5,11,12],
+ 'The Warden':[15,16,17]
+};
+let S={
+ mode:'title',area:'town',x:4,y:6,money:120,potions:4,capsules:8,
+ party:[buildCreature(0,5)],box:[],caught:{0:true},seen:{0:true},badges:0,
+ defeated:{},flags:{warden:false},msg:'',battle:null,lines:[],boxMode:false
+};
+function txt(t,x,y,s=7,col=C.p){g.fillStyle=col;g.font=s+'px monospace';g.fillText(String(t),x,y)}
+function rect(x,y,w,h,col){g.fillStyle=col;g.fillRect(x,y,w,h)}
+function box(x,y,w,h){rect(x,y,w,h,C.p);g.strokeStyle=C.d;g.lineWidth=2;g.strokeRect(x,y,w,h)}
+function clear(){const ac=areaColors();rect(0,0,160,144,ac[0]); for(let i=0;i<18;i++){rect((i*23)%160,(i*31)%144,3,3,ac[1])}}
+function border(){g.strokeStyle=C.d;g.lineWidth=2;g.strokeRect(2,2,156,140)}
+function title(){
+ clear();for(let i=0;i<70;i++)rect((i*31)%160,(i*17)%144,1,1,[C.pink,C.yellow,C.blue,C.green,C.purple][i%5]);
+ txt('MONSTERBOUND',30,42,14,C.pink);txt('POCKET WILDS',43,57,8,C.yellow);
+ box(39,72,82,27);txt('NEW ADVENTURE',52,88,7,C.d);
+ txt('A / ENTER TO BEGIN',43,116,6,C.d);txt('M MENU  S SAVE',53,124,5,C.d);txt('150 ORIGINAL SPECIES',37,128,6,C.d);
+}
+function mapDraw(){
+ clear();const A=areas[S.area];
+ for(let y=0;y<18;y++)for(let x=0;x<20;x++){
+  const edge=x===0||y===0||x===19||y===17,path=x===9||y===12;
+  const ac=areaColors(); rect(x*8,y*8,8,8,edge?C.d:path?C.p:ac[1]);
+ }
+ for(const q of A.grass){const ac=areaColors(); rect(q[0]*8,q[1]*8,8,8,ac[0]);rect(q[0]*8+1,q[1]*8+1,2,6,C.green);rect(q[0]*8+5,q[1]*8+2,2,5,C.green)}
+ if(A.shop){rect(A.shop[0]*8,A.shop[1]*8,8,8,C.p);txt('$',A.shop[0]*8+2,A.shop[1]*8+7,8,C.d)}
+ if(A.heal){rect(A.heal[0]*8,A.heal[1]*8,8,8,C.p);txt('+',A.heal[0]*8+2,A.heal[1]*8+7,8,C.d)}
+ if(A.npc){rect(A.npc[0]*8+1,A.npc[1]*8+1,6,6,C.m);rect(A.npc[0]*8+2,A.npc[1]*8+2,4,2,C.d)}
+ for(const t of (A.trainers||[]))if(!S.defeated[t[2]])rect(t[0]*8+1,t[1]*8+1,6,6,C.d);
+ if(A.boss&&!S.flags.warden)rect(A.boss[0]*8+1,A.boss[1]*8+1,6,6,C.d);
+ rect(S.x*8+2,S.y*8+1,4,6,C.d);rect(S.x*8+1,S.y*8+2,6,3,C.d);
+ box(3,125,154,16);txt(A.name,7,135,6,C.d);
+ if(S.area==='town')txt('Start: explore Route 1',7,123,5,C.d);
+ else if(S.area==='route1')txt('Goal: defeat Mira',7,123,5,C.d);
+ else if(S.area==='lake')txt('Goal: defeat Bram',7,123,5,C.d);
+ else if(S.area==='grove')txt('Goal: earn badge 3',7,123,5,C.d);
+ else if(S.area==='summit')txt(S.flags.warden?'Goal: explore Moonlit Hollow':'Goal: face the Warden',7,123,5,C.d);
+ else if(S.area==='hollow')txt('Postgame: seek rare species',7,123,5,C.d);
+ txt('Lv'+active().lv+' HP '+active().hp+'/'+active().max,82,135,6,C.d);
+ if(S.msg){txt(S.msg.slice(0,28),7,143,4,C.d)}
+}
+function sprite(x,y,flip=false,type='Stone'){
+ const tc=typeColor(type);
+ rect(x,y,18,12,tc);rect(x+3,y-4,12,4,tc);rect(x-3,y+4,4,5,tc);rect(x+17,y+4,4,5,tc);
+ rect(x+4,y+2,2,2,C.white);rect(x+12,y+2,2,2,C.white);rect(x+5,y+3,1,1,C.d);rect(x+13,y+3,1,1,C.d);
+}
+function active(){return S.party.find(q=>q.hp>0)||S.party[0]}
+function battleDraw(){
+ clear();border();
+ const b=S.battle,e=monsters[b.enemy.sid],me=active(),ms=monsters[me.sid];
+ txt((b.trainer?'TRAINER ':'WILD ')+e.n.toUpperCase(),6,12,7,C.d);
+ txt('Team '+(b.slot+1)+'/'+b.team.length,82,12,5,C.d);
+ txt('Lv'+b.enemy.lv,126,12,7,C.d);
+ rect(88,17,62,5,C.d);rect(90,18,58,3,'#ff8c94');rect(90,18,58*Math.max(0,b.enemy.hp/b.enemy.max),3,C.green);
+ sprite(108,43,false,e.type);sprite(32,67,false,ms.type);
+ txt(ms.n.toUpperCase(),6,96,6,C.d);txt('Lv'+me.lv,58,96,6,C.d);
+ rect(7,101,70,5,C.d);rect(9,102,66,3,'#ff8c94');rect(9,102,66*(me.hp/me.max),3,C.green);txt('HP '+me.hp+'/'+me.max,7,116,6,C.d);
+ box(3,120,154,21);
+ if(b.menu==='moves'){txt('A:'+moves[me.moves[0]].n,8,129,5,C.d);txt('B:'+moves[me.moves[1]].n,8,137,5,C.d);txt('Y: switch',96,129,5,C.d)}
+ else if(b.menu==='switch'){txt('1-6: choose creature',8,130,6,C.d);txt('B: back',8,138,6,C.d)}
+ else {txt('A FIGHT   Y SWITCH',8,130,6,C.d);txt('B CAPTURE  X RUN',8,138,6,C.d)}
+ if(b.message)txt(b.message,78,130,5,C.d);
+}
+function storyDraw(){
+ txt('WILDLIFE CHECKLIST',7,15,7,C.d);
+ txt((S.badges>=4?'✓':'□')+' Four badges',7,28,6,C.d);
+ txt((S.flags.warden?'✓':'□')+' Warden trial',7,39,6,C.d);
+ txt((S.caught.filter(Boolean).length>=150?'✓':'□')+' 150 species',7,50,6,C.d);
+ txt((S.area==='hollow'||S.flags.warden?'✓':'□')+' Moonlit Hollow',7,61,6,C.d);
+
+ clear();border();box(5,15,150,110);
+ (S.lines||['...']).forEach((v,i)=>txt(v,10,34+i*13,7,C.d));txt('A: continue',55,119,6,C.d);
+}
+function menuDraw(){
+ clear();border();txt('TRAINER MENU',9,14,9,C.d);
+ txt('Party '+S.party.length+'/6   Box '+S.box.length,9,28,7,C.d);
+ txt('Caught '+Object.keys(S.caught).length+'/150',9,40,7,C.d);
+ txt('$'+S.money+'  Potions '+S.potions+'  Caps '+S.capsules,9,52,7,C.d);
+ txt('Badges '+S.badges+'/4',9,64,7,C.d);
+ S.party.slice(0,4).forEach((q,i)=>txt((i+1)+'. '+monsters[q.sid].n+' Lv'+q.lv+' HP '+q.hp+'/'+q.max,9,77+i*9,6,C.d));
+ txt('A potion   Y box   B close',9,118,6,C.d);
+}
+
+function partyScreen(){
+ S.mode='party';
+}
+function partyDraw(){
+ clear();border();txt(S.boxMode?'BOX':'PARTY',8,13,9,C.d);
+ if(S.boxMode){
+   if(!S.box.length)txt('The box is empty.',8,35,6,C.d);
+   S.box.slice(0,6).forEach((q,i)=>{
+    const y=30+i*16;box(5,y-7,150,14);
+    txt((i+1)+'. '+monsters[q.sid].n,9,y+2,6,C.d);
+    txt('Lv'+q.lv,76,y+2,5,C.d);txt(q.hp+'/'+q.max,104,y+2,5,C.d);
+   });
+   txt('1-6 move to party • Y party • B back',8,134,5,C.d);
+ }else{
+   S.party.forEach((q,i)=>{
+    const y=32+i*14;box(5,y-6,150,12);
+    txt((i+1)+'. '+monsters[q.sid].n,9,y+2,6,C.d);
+    txt('Lv'+q.lv,70,y+2,5,C.d);txt(q.hp+'/'+q.max,96,y+2,5,C.d);
+    txt(q.sid===active().sid?'ACTIVE':'',127,y+2,4,C.m);
+   });
+   txt('Box: '+S.box.length+' stored',8,120,6,C.d);
+   txt('1-6 reorder • Y box • H heal • B back',8,134,5,C.d);
+ } 
+}
+
+function collectionDraw(){
+ clear();border();txt('FIELD GUIDE',8,13,9,C.d);
+ const page=S.guidePage||0,start=page*30;
+ for(let i=0;i<30&&start+i<monsters.length;i++){
+  const id=start+i,s=monsters[id],caught=S.caught[id],seen=S.seen[id];
+  const x=(i%3)*53+4,y=Math.floor(i/3)*12+24;
+  txt(String(id+1).padStart(3,'0'),x,y,5,C.d);
+  txt(caught?s.n:(seen?'?????':'-----'),x+18,y,5,C.d);
+  if(caught)txt(s.type,x+18,y+6,4,C.m);
+ }
+ txt(S.flags.complete150?'ALL 150 CAPTURED!':'B close  ◀/▶ page',43,139,6,C.d);
+}
+function message(lines){S.lines=lines;S.mode='story'}
+function beginBattle(id,trainer=false,name=''){
+ const lv=Math.max(2,active().lv+(trainer?1:Math.floor(Math.random()*3)-1));
+ S.seen[id]=true;
+ const ids=trainer?(trainerTeams[name]||[id]):[id];
+ const team=ids.map((sid,i)=>buildCreature(sid,Math.max(2,lv+i)));
+ S.battle={trainer,trainerName:name,team,slot:0,enemy:team[0],menu:'main',message:trainer?name+' challenges you!':'A wild '+monsters[id].n+' appeared!'};
+ S.mode='battle';
+}
+function wildEncounter(){
+ const list=encounterTables[S.area]||encounterTables.route1;
+ if(!list)return;
+ const id=list[Math.floor(Math.random()*list.length)];
+ beginBattle(id,false);
+}
+function hit(att,move,def){
+ const mult=(typeBonus[move.t]&&typeBonus[move.t][monsters[def.sid].type])||1;
+ const variance=.85+Math.random()*.3;
+ return Math.max(1,Math.floor((att.atk+att.lv*1.5+move.p)*mult*variance/Math.max(1,def.def*.65)));
+}
+
+function partyDefeated(){
+ return !S.party.some(q=>q.hp>0);
+}
+function rescueTeam(){
+ S.party.forEach(q=>q.hp=q.max);
+ S.area='town';S.x=4;S.y=6;
+ S.money=Math.max(0,S.money-25);
+ S.msg='Your team was rescued. $25 medical fee.';
+ S.mode='map';S.battle=null;
+}
+
+function enemyAct(){
+ const b=S.battle,e=b.enemy,me=active();
+ const mv=moves[e.moves[Math.floor(Math.random()*e.moves.length)]];
+ if(Math.random()*100>mv.a){b.message=e.n+' missed!';return}
+ const d=hit(e,mv,me);me.hp=Math.max(0,me.hp-d);b.message=e.n+' used '+mv.n+'! -'+d;
+ if(me.hp<=0){
+  if(S.party.some(q=>q.hp>0)){b.message+=' Choose another creature.';b.menu='switch';}
+  else rescueTeam()
+ }
+}
+
+const evolutionMap={18:19,20:21,28:29,34:35,43:44,50:51,65:66,73:74,90:91,104:105,121:122,137:138};
+function maybeEvolve(q){
+ const next=evolutionMap[q.sid];
+ if(next===undefined || q.lv<12) return null;
+ q.sid=next;
+ q.max+=6;q.hp=q.max;q.atk+=2;q.def+=2;q.spd+=2;
+ S.caught[next]=true;S.seen[next]=true;
+ return monsters[next].n;
+}
+function gainXP(q,n){
+ q.xp+=n;
+ let leveled=false;
+ while(q.xp>=q.lv*10){q.xp-=q.lv*10;q.lv++;q.max+=3;q.hp=q.max;q.atk+=1;q.def+=1;q.spd+=1;leveled=true}
+ const evolved=maybeEvolve(q);
+ if(evolved) S.msg='Your creature evolved into '+evolved+'!';
+ return leveled;
+}
+function winBattle(){
+ const b=S.battle,enemy=b.enemy,me=active(),reward=8+enemy.lv*4;
+ const levelled=gainXP(me,reward);S.money+=b.trainer?50+enemy.lv*10:0;
+ if(b.trainer && b.slot < b.team.length-1){
+   b.slot++;
+   b.enemy=b.team[b.slot];
+   S.seen[b.enemy.sid]=true;
+   b.menu='main';
+   b.message='Go, '+monsters[b.enemy.sid].n+'!';
+   return;
+ }
+ if(b.trainer){
+  S.defeated[b.trainerName]=true;
+  const order=['Mira','Bram','Rook','The Warden'];
+  const idx=order.indexOf(b.trainerName);
+  if(idx>=0){
+   const old=S.badges;
+   S.badges=Math.max(S.badges,idx+1);
+   if(S.badges>old){S.money+=100;S.capsules+=2;S.potions+=1;S.msg='Badge earned! +$100, +2 capsules, +1 potion.';}
+ }
+  if(b.trainerName==='The Warden'){
+   S.flags.warden=true;
+   S.money+=500;S.capsules+=10;
+   message(['The Warden lowers the ancient crest.','The four badges are yours.','The Wildkeeper trial is complete!','The summit path opens beyond the old gate.','You receive $500 and 10 capsules.','FREE ROAM UNLOCKED!','The eastern summit gate now leads to Moonlit Hollow.','The Wilds are yours to explore.']);
+   S.battle=null;return;
+  }
+ }
+ b.message='Victory! +'+reward+' XP'+(levelled?' LEVEL UP!':'');
+ setTimeout(()=>{S.mode='map';S.battle=null},900);
+}
+function useMove(slot){
+ const b=S.battle,me=active(),mv=moves[me.moves[slot]];
+ b.menu='main';
+ if(Math.random()*100>mv.a){b.message=me.n+' missed!';enemyAct();return}
+ const d=hit(me,mv,b.enemy);b.enemy.hp=Math.max(0,b.enemy.hp-d);
+ const mult=(typeBonus[mv.t]&&typeBonus[mv.t][monsters[b.enemy.sid].type])||1;
+ b.message=me.n+' used '+mv.n+'! -'+d+(mult>1?' SUPER!':mult<1?' weak...':'');
+ if(b.enemy.hp<=0)winBattle();else enemyAct();
+}
+function capture(){
+ const b=S.battle;
+ if(b.trainer){b.message='Trainer creatures cannot be captured.';return}
+ if(S.capsules<=0){b.message='No capsules left!';return}
+ S.capsules--;
+ const ratio=1-b.enemy.hp/b.enemy.max;
+ const chance=.18+ratio*.68;
+ if(Math.random()<chance){
+  const q=buildCreature(b.enemy.sid,b.enemy.lv);S.caught[b.enemy.sid]=true;
+  if(Object.keys(S.caught).length>=150) S.flags.complete150=true;
+  if(S.party.length<6)S.party.push(q);else S.box.push(q);
+  b.message='Captured '+monsters[q.sid]+'!';
+  setTimeout(()=>{S.mode='map';S.battle=null},700);
+ }else{b.message='It broke free!';enemyAct()}
+}
+function switchTo(index){
+ const q=S.party[index];
+ if(!q||q.hp<=0)return;
+ S.party.splice(index,1);S.party.unshift(q);
+ if(S.battle){S.battle.menu='main';S.battle.message=monsters[q.sid].n+' enters!';enemyAct()}
+}
+function battleAction(a){
+ const b=S.battle;if(!b)return;
+ if(partyDefeated()){rescueTeam();return;}
+ if(a==='fight')b.menu='moves';
+ else if(a==='capture')capture();
+ else if(a==='run'){if(b.trainer)b.message='No escape from a trainer battle!';else{S.mode='map';S.battle=null;S.msg='Escaped.'}}
+}
+function interact(){
+ const A=areas[S.area];
+ if(A.heal&&Math.abs(S.x-A.heal[0])+Math.abs(S.y-A.heal[1])<=1){S.party.forEach(q=>q.hp=q.max);S.msg='Your whole party is healed.'}
+ if(A.shop&&Math.abs(S.x-A.shop[0])+Math.abs(S.y-A.shop[1])<=1&&S.money>=20){S.money-=20;S.potions++;S.msg='Bought a potion for $20.'}
+ if(A.npc&&S.x===A.npc[0]&&S.y===A.npc[1]){
+  if(S.area==='town')message(['Welcome, Wildkeeper!','Walk through tall grass to find creatures.','Beat trainers to earn four badges.','Your Field Guide tracks every species.']);
+  else if(S.area==='lake')message(['Azure Lake hides rare water creatures.','The next road leads into Whisper Grove.']);
+  else if(S.area==='grove')message(['The grove is home to old keeper stones.','Rook guards the final road to the summit.']);
+  else if(S.area==='summit')message(['The Warden awaits.','Bring a full team if you want the safest climb.','After the trial, the eastern gate opens to Moonlit Hollow.']);
+  else if(S.area==='hollow')message(['Moonlit Hollow lies beyond the summit gate.','Every species can be found somewhere in the Wilds.','Complete the Field Guide if you want the ultimate Wildkeeper challenge.']);
+ }
+}
+function move(dx,dy){
+ if(S.mode==='title'){
+ S.mode='map';
+ message(['Welcome to the Wilds.','Every creature has its own element, strengths,','moves, and growth path.','Build a team, earn four badges, and face the Warden.']);
+ return
+}
+ if(S.mode!=='map')return;
+ let nx=S.x+dx,ny=S.y+dy,A=areas[S.area];
+ if(nx<0||ny<1||nx>19||ny>16)return;
+ if(nx===19&&A.exits.east){
+   if(S.area==='grove'&&S.badges<3){S.msg='Three badges are required to reach Elder Summit.';return}
+   S.area=A.exits.east;S.x=1;S.y=12;return
+ }
+ if(nx===0&&A.exits.west){S.area=A.exits.west;S.x=18;S.y=12;return}
+ if(nx<1||nx>18){return}
+ S.x=nx;S.y=ny;interact();
+ for(const t of (A.trainers||[]))if(nx===t[0]&&ny===t[1]&&!S.defeated[t[2]]){beginBattle(t[3][0],true,t[2]);return}
+ if(A.boss&&nx===A.boss[0]&&ny===A.boss[1]&&!S.flags.warden){beginBattle(A.boss[2][0],true,'The Warden');return}
+ if(A.grass.some(q=>q[0]===nx&&q[1]===ny)&&Math.random()<.16)wildEncounter();
+}
+function action(){
+ if(S.mode==='title'){S.mode='map';return}
+ if(S.mode==='battle'){
+  const b=S.battle;if(b.menu==='moves'){useMove(0);return}
+  battleAction('fight');return;
+ }
+ if(S.mode==='story'){S.mode='map';return}
+ if(S.mode==='menu'){
+  const q=active();if(S.potions>0&&q.hp<q.max){S.potions--;q.hp=Math.min(q.max,q.hp+18);S.msg='Potion restored '+q.sid+'.'}else S.mode='map';return;
+ }
+ if(S.mode==='collection'){S.mode='menu';return}
+ interact();
+}
+function back(){
+ if(S.mode==='battle'){battleAction('run')}
+ else if(S.mode==='menu'||S.mode==='story'||S.mode==='collection'||S.mode==='party')S.mode='map';
+}
+function save(){
+ try{localStorage.setItem('monsterbound_full_save_backup',localStorage.getItem('monsterbound_full_save_v2')||'');
+ localStorage.setItem('monsterbound_full_save_v2',JSON.stringify(S));S.msg='Game saved.'}
+ catch(e){S.msg='Save unavailable.'}
+}
+function load(){
+ try{const z=JSON.parse(localStorage.getItem('monsterbound_full_save_v2'));if(z&&z.party&&z.party[0]&&typeof z.party[0]==='object'){S=z;S.box=S.box||[];S.flags=S.flags||{};S.flags.warden=!!S.flags.warden;S.boxMode=false}}catch(e){}
+}
+function refreshPanels(){
+ const mp=document.getElementById('menuPanel');
+ mp.innerHTML='<b>TRAINER MENU</b><div class="grid"><button id="potion">Potion ('+S.potions+')</button><button id="guide">Field Guide</button><button id="box">Party / Box</button><button id="closeMenu">Close</button></div><p class="small">Badges '+S.badges+'/4 • $'+S.money+' • Caught '+Object.keys(S.caught).length+'/150</p>';
+ mp.querySelector('#potion').onclick=()=>{const q=active();if(S.potions>0&&q.hp<q.max){S.potions--;q.hp=Math.min(q.max,q.hp+18)}refreshPanels()};
+ mp.querySelector('#guide').onclick=()=>{document.getElementById('menuPanel').style.display='none';S.mode='collection'};
+ mp.querySelector('#box').onclick=()=>{document.getElementById('menuPanel').style.display='none';S.boxMode=false;S.mode='party'};
+ mp.querySelector('#closeMenu').onclick=()=>mp.style.display='none';
+ const dp=document.getElementById('devPanel');
+ dp.innerHTML='<b>DEV MENU</b><p class="small">Creator tools for your own game.</p><div class="grid"><label>Lv <input id="dl" type="number" value="'+active().lv+'"></label><label>Money <input id="dm" type="number" value="'+S.money+'"></label><label>Potions <input id="dp" type="number" value="'+S.potions+'"></label><label>Capsules <input id="dc" type="number" value="'+S.capsules+'"></label></div><button id="applyDev">Apply</button><button id="all">Unlock 150</button><button id="healDev">Heal All</button><button id="closeDev">Close</button>';
+ dp.querySelector('#applyDev').onclick=()=>{const q=active();q.lv=Math.max(1,+document.getElementById('dl').value||1);q.max=Math.max(q.max,8+q.lv*3);q.hp=q.max;S.money=Math.max(0,+document.getElementById('dm').value||0);S.potions=Math.max(0,+document.getElementById('dp').value||0);S.capsules=Math.max(0,+document.getElementById('dc').value||0);dp.style.display='none'};
+ dp.querySelector('#all').onclick=()=>{monsters.forEach((_,i)=>{S.caught[i]=true;S.seen[i]=true});S.msg='All 150 species unlocked for testing.'};
+ dp.querySelector('#healDev').onclick=()=>S.party.forEach(q=>q.hp=q.max);
+ dp.querySelector('#closeDev').insertAdjacentHTML('beforebegin','<button id="newGame">NEW GAME</button>');
+ dp.querySelector('#newGame').onclick=()=>{if(confirm('Start a new adventure?')){localStorage.removeItem('monsterbound_full_save_v2');location.reload()}};
+ dp.querySelector('#newGame').insertAdjacentHTML('afterend','<button id="restoreBackup">RESTORE BACKUP</button>');
+ dp.querySelector('#restoreBackup').onclick=()=>{const b=localStorage.getItem('monsterbound_full_save_backup');if(b){localStorage.setItem('monsterbound_full_save_v2',b);location.reload()}else alert('No backup save exists yet.')};
+ dp.querySelector('#closeDev').onclick=()=>dp.style.display='none';
+}
+function render(){
+ if(S.mode==='title')title();
+ else if(S.mode==='map')mapDraw();
+ else if(S.mode==='battle')battleDraw();
+ else if(S.mode==='menu')menuDraw();
+ else if(S.mode==='collection')collectionDraw();
+ else if(S.mode==='party')partyDraw();
+ else storyDraw();
+}
+function loop(){
+ render();
+ const bb=document.getElementById('battleBar');
+ bb.style.display=(S.mode==='battle'?'grid':'none');
+ const ctx=g;
+ if(S.mode==='map'){ctx.save(); if(modNight()){ctx.fillStyle='rgba(20,10,70,.24)';ctx.fillRect(0,0,c.width,c.height)} if(MOD.weather!=='clear'){ctx.fillStyle='rgba(255,255,255,.72)';ctx.font='7px monospace';ctx.fillText(MOD.weather.toUpperCase(),5,10)} ctx.restore();}
+ updateModVisual();
+ requestAnimationFrame(loop)
+}
+document.getElementById('a').onclick=action;
+document.getElementById('menu').onclick=()=>{S.mode='menu';refreshPanels();document.getElementById('menuPanel').style.display='block'};
+document.getElementById('save').onclick=save;
+document.getElementById('load').onclick=()=>{load();S.msg='Save loaded.'};
+document.getElementById('fightBtn').onclick=()=>{if(S.mode==='battle')battleAction('fight')};
+document.getElementById('capBtn').onclick=()=>{if(S.mode==='battle')battleAction('capture')};
+document.getElementById('switchBtn').onclick=()=>{if(S.mode==='battle')S.battle.menu='switch'};
+document.getElementById('dev').onclick=()=>{refreshPanels();document.getElementById('devPanel').style.display='block'};
+document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{let k=b.dataset.k;if(k==='up')move(0,-1);if(k==='down')move(0,1);if(k==='left')move(-1,0);if(k==='right')move(1,0);if(k==='a')action()});
+document.addEventListener('keydown',e=>{
+ if(['INPUT','BUTTON'].includes(document.activeElement.tagName))return;
+ const k=e.key.toLowerCase();
+ if(k==='arrowup'||k==='w')move(0,-1);
+ if(k==='arrowdown'||k==='s')move(0,1);
+ if(k==='arrowleft'||k==='a')move(-1,0);
+ if(k==='arrowright'||k==='d')move(1,0);
+ if(k==='enter'||k===' ')action();
+ if(k==='escape')back();
+ if(S.mode==='battle'&&k==='b'){
+   if(S.battle.menu==='moves')useMove(1);
+   else if(S.battle.menu==='switch')S.battle.menu='main';
+   else battleAction('capture');
+ }
+ if(S.mode==='battle'&&k==='x')battleAction('run');
+ if(S.mode==='battle'&&k==='y'){S.battle.menu='switch';}
+ if(S.mode==='battle'&&k>='1'&&k<='6'&&S.battle.menu==='switch')switchTo(+k-1);
+ if(S.mode==='collection'&&k==='arrowright'){S.guidePage=Math.min(4,(S.guidePage||0)+1)}
+ if(S.mode==='collection'&&k==='arrowleft'){S.guidePage=Math.max(0,(S.guidePage||0)-1)}
+ if(S.mode==='party'){
+   if(k==='y'){S.boxMode=!S.boxMode;return}
+   if(k>='1'&&k<='6'){
+     const i=+k-1;
+     if(S.boxMode){
+       if(i<S.box.length&&S.party.length<6){S.party.push(S.box.splice(i,1)[0]);S.msg='Moved creature from box to party.'}
+       else if(S.party.length>=6)S.msg='Party is full.'
+     }else if(i<S.party.length){
+       const q=S.party.splice(i,1)[0];S.party.unshift(q);S.msg='Party order updated.'
+     }
+   }
+   if(k==='h')S.party.forEach(q=>q.hp=q.max);
+ }
+});
+document.getElementById('timeBtn').onclick=cycleTime;
+document.getElementById('weatherBtn').onclick=cycleWeather;
+document.getElementById('modBtn').onclick=showModInfo;
+updateModVisual();
+load();
+setInterval(()=>{if(typeof save==='function'&&S&&S.mode!=='title')save()},15000);
+loop();
+})();
+</script>
+
+</body></html>
